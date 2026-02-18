@@ -1,3 +1,4 @@
 #pragma once
 
-static struct funnel_ctx *ctx;
+// only need one context per application
+inline struct funnel_ctx *ctx;

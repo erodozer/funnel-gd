@@ -39,6 +39,8 @@ env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
 
 env.Append(CPPPATH=["src/"])
 env.Append(CPPPATH=[os.path.join("libfunnel", "include")])
+env.Append(LIBPATH=[os.path.join("libfunnel", "build")])
+env.Append(LIBS=["funnel", "funnel-vk"])
 
 sources = Glob("src/*.cpp")
 

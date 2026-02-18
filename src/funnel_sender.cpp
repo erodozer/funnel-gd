@@ -1,10 +1,10 @@
 #include "funnel_sender.h"
 
-#include "godot_cpp/classes/engine.hpp"
-#include "godot_cpp/classes/rendering_server.hpp"
-#include "godot_cpp/classes/rendering_device.hpp"
-#include "godot_cpp/variant/rid.hpp"
-#include "godot_cpp/classes/viewport_texture.hpp"
+#include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/rendering_server.hpp>
+#include <godot_cpp/classes/rendering_device.hpp>
+#include <godot_cpp/variant/rid.hpp>
+#include <godot_cpp/classes/viewport_texture.hpp>
 
 #include <funnel.h>
 #include <funnel-vk.h>
@@ -13,6 +13,7 @@
 
 FunnelSender::FunnelSender()
 	: sender_name("")
+	, stream(nullptr)
 	, texture(nullptr) {
 
 }
@@ -43,6 +44,8 @@ void FunnelSender::stop_stream() {
 		return;
 	}
 
+	UtilityFunctions::print("[libfunnel] stream exists, stopping");
+
 	funnel_stream_stop(this->stream);
 	funnel_stream_destroy(this->stream);
 
@@ -58,6 +61,8 @@ void FunnelSender::start_stream() {
 	// stop stream if it's currently running
 	this->stop_stream();
 
+	ERR_FAIL_COND_MSG(ctx == nullptr, "[libfunnel] ctx is not properly initialized");
+
 	struct funnel_stream *stream;
 	RID placeholder;
 
@@ -65,10 +70,20 @@ void FunnelSender::start_stream() {
 	RenderingDevice *rd = rs->get_rendering_device();
 	VkInstance instance = (VkInstance) rd->get_driver_resource(RenderingDevice::DRIVER_RESOURCE_TOPMOST_OBJECT, placeholder, 0);
 	VkPhysicalDevice phy_device = (VkPhysicalDevice) rd->get_driver_resource(RenderingDevice::DRIVER_RESOURCE_PHYSICAL_DEVICE, placeholder, 0);
-	VkDevice log_device = (VkDevice) rd->get_driver_resource(RenderingDevice::DRIVER_RESOURCE_LOGICAL_DEVICE, placeholder, 0);
+	VkDevice device = (VkDevice) rd->get_driver_resource(RenderingDevice::DRIVER_RESOURCE_LOGICAL_DEVICE, placeholder, 0);
 
-	funnel_stream_create(ctx, (const char*)this->sender_name.ptr(), &stream);
-	funnel_stream_init_vulkan(stream, instance, phy_device, log_device);
+	ERR_FAIL_COND_MSG(instance == VK_NULL_HANDLE, "[libfunnel] vulkan instance not ready");
+	ERR_FAIL_COND_MSG(phy_device == VK_NULL_HANDLE, "[libfunnel] vulkan instance not ready");
+	ERR_FAIL_COND_MSG(device == VK_NULL_HANDLE, "[libfunnel] vulkan instance not ready");
+
+	int ret;
+	ret = funnel_stream_create(ctx, (const char*)this->sender_name.ptr(), &stream);
+	ERR_FAIL_COND_MSG(ret != 0, "[libfunnel] unable to create stream");
+
+	ret = funnel_stream_init_vulkan(stream, instance, phy_device, device);
+	ERR_FAIL_COND_MSG(ret == -EOPNOTSUPP, "[libfunnel] unable to init from vulkan (missing extensions)");
+	ERR_FAIL_COND_MSG(ret == -EPROTONOSUPPORT, "[libfunnel] unable to init from vulkan (GPU driver not supported / Pipewire version too old)");
+	ERR_FAIL_COND_MSG(ret == -ENODEV, "[libfunnel] unable to init from vulkan (could not locate DRM render mode)");
 	
 	funnel_stream_set_mode(stream, FUNNEL_SYNCHRONOUS);
     funnel_stream_set_sync(stream, FUNNEL_SYNC_BOTH, FUNNEL_SYNC_BOTH);
@@ -84,11 +99,11 @@ void FunnelSender::start_stream() {
 	
 	funnel_stream_configure(stream);
 	
-	int ret = funnel_stream_start(stream);
-	
+	ret = funnel_stream_start(stream);
 	ERR_FAIL_COND_MSG(ret != 0, "[libfunnel] unable to start stream");
 
 	this->stream = stream;
+	UtilityFunctions::print("[libfunnel] stream started with id ", this->sender_name);
 }
 
 void FunnelSender::set_sender_name(String name) {

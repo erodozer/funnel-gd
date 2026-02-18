@@ -7,11 +7,11 @@ reloadable = false
 [libraries]
 ; Relative paths ensure that our GDExtension can be placed anywhere in the project directory.
 
-linux.debug.x86_64 = "./linux/libfunnel-gd.linux.template_debug.x86_64.so"
-linux.release.x86_64 = "./linux/libfunnel-gd.linux.template_release.x86_64.so"
+linux.debug = "./linux/libfunnel-gd.linux.template_debug.x86_64.so"
+linux.release = "./linux/libfunnel-gd.linux.template_release.x86_64.so"
 
 [dependencies]
-linux.x86_64 = {
-	"./linux/libfunnel.so": "",
-	"./linux/libfunnel-vk.so": ""
+linux = {
+	"./linux/libfunnel-vk.so": "",
+	"./linux/libfunnel.so": ""
 }
