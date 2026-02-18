@@ -3,9 +3,28 @@
 [ext_resource type="Script" uid="uid://u2bwgky3jon5" path="res://example.gd" id="1_jdh55"]
 [ext_resource type="Texture2D" uid="uid://dbx66sovxd1" path="res://icon.svg" id="2_n51mc"]
 
+[sub_resource type="ViewportTexture" id="ViewportTexture_n51mc"]
+viewport_path = NodePath("SubViewportContainer/SubViewport")
+
 [node name="Node" type="Node" unique_id=1521624147]
 script = ExtResource("1_jdh55")
 
 [node name="Icon" type="Sprite2D" parent="." unique_id=1776710171]
 position = Vector2(569, 313)
+texture = ExtResource("2_n51mc")
+
+[node name="FunnelSender" type="FunnelSender" parent="." unique_id=5383766]
+sender_name = "Subviewport Example"
+viewport_texture = SubResource("ViewportTexture_n51mc")
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="." unique_id=1187627574]
+offset_right = 512.0
+offset_bottom = 512.0
+
+[node name="SubViewport" type="SubViewport" parent="SubViewportContainer" unique_id=2054068344]
+transparent_bg = true
+
+[node name="Icon2" type="Sprite2D" parent="SubViewportContainer/SubViewport" unique_id=689900557]
+self_modulate = Color(1, 0, 0, 1)
+position = Vector2(128, 128)
 texture = ExtResource("2_n51mc")
