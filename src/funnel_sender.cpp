@@ -4,7 +4,7 @@
 #include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/rendering_device.hpp>
 #include <godot_cpp/variant/rid.hpp>
-#include <godot_cpp/classes/viewport_texture.hpp>
+#include <godot_cpp/classes/viewport.hpp>
 
 #include <funnel.h>
 #include <funnel-vk.h>
@@ -13,8 +13,9 @@
 
 FunnelSender::FunnelSender()
 	: sender_name("")
+	, target_viewport(nullptr)
 	, stream(nullptr)
-	, texture(nullptr) {
+	, buf(nullptr) {
 
 }
 
@@ -54,7 +55,7 @@ void FunnelSender::stop_stream() {
 }
 
 void FunnelSender::start_stream() {
-	if (this->texture == nullptr || this->sender_name.is_empty()) {
+	if (this->target_viewport == nullptr || this->sender_name.is_empty()) {
 		return;
 	}
 
@@ -85,25 +86,22 @@ void FunnelSender::start_stream() {
 	ERR_FAIL_COND_MSG(ret == -EPROTONOSUPPORT, "[libfunnel] unable to init from vulkan (GPU driver not supported / Pipewire version too old)");
 	ERR_FAIL_COND_MSG(ret == -ENODEV, "[libfunnel] unable to init from vulkan (could not locate DRM render mode)");
 	
-	funnel_stream_set_mode(stream, FUNNEL_SYNCHRONOUS);
-    funnel_stream_set_sync(stream, FUNNEL_SYNC_BOTH, FUNNEL_SYNC_BOTH);
-	
-	funnel_stream_set_rate(stream, FUNNEL_RATE_VARIABLE,
-                               FUNNEL_RATE_VARIABLE, FUNNEL_FRACTION(1000, 1));
-
-	funnel_stream_set_size(stream, this->texture->get_width(), this->texture->get_height());
+	funnel_stream_set_mode(stream, FUNNEL_ASYNC);
     
 	funnel_stream_vk_add_format(stream, VK_FORMAT_R8G8B8A8_SRGB, true, VK_FORMAT_FEATURE_BLIT_DST_BIT);
-	
-	funnel_stream_vk_set_usage(stream, VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-	
-	funnel_stream_configure(stream);
+	funnel_stream_vk_add_format(stream, VK_FORMAT_B8G8R8A8_SRGB, true, VK_FORMAT_FEATURE_BLIT_DST_BIT);
+	funnel_stream_vk_add_format(stream, VK_FORMAT_R8G8B8A8_SRGB, false, VK_FORMAT_FEATURE_BLIT_DST_BIT);
+	funnel_stream_vk_add_format(stream, VK_FORMAT_B8G8R8A8_SRGB, false, VK_FORMAT_FEATURE_BLIT_DST_BIT);
+
+	Vector2i size = this->target_viewport->get_visible_rect().size;
+	ERR_FAIL_COND_MSG(size.x == 0 || size.y == 0, "[libfunnel] viewport dimensions must be larger than (0,0)");
+    funnel_stream_set_size(stream, size.x, size.y);
 	
 	ret = funnel_stream_start(stream);
-	ERR_FAIL_COND_MSG(ret != 0, "[libfunnel] unable to start stream");
+	ERR_FAIL_COND_MSG(ret != 0, "[libfunnel] unable to start stream: " + this->sender_name);
 
 	this->stream = stream;
-	UtilityFunctions::print("[libfunnel] stream started with id ", this->sender_name);
+	UtilityFunctions::print("[libfunnel] stream started (id: ", this->sender_name, ")");
 }
 
 void FunnelSender::set_sender_name(String name) {
@@ -112,8 +110,8 @@ void FunnelSender::set_sender_name(String name) {
 	this->start_stream();
 }
 
-void FunnelSender::set_viewport_texture(ViewportTexture *viewport) {
-	this->texture = viewport;
+void FunnelSender::set_target_viewport(Viewport *viewport) {
+	this->target_viewport = viewport;
 
 	this->start_stream();
 }
@@ -126,14 +124,32 @@ void FunnelSender::prepare_buffer() {
 	struct funnel_buffer *buf;
 
 	int ret = funnel_stream_dequeue(this->stream, &buf);
-	ERR_FAIL_COND_MSG(ret < 1, "[libfunnel] no buffer is available");
+	if (ret < 1) {
+		// no buffer available
+		return;
+	}
+	
+	uint32_t width, height;
+	uint32_t new_width = this->target_viewport->get_visible_rect().size.x;
+	uint32_t new_height = this->target_viewport->get_visible_rect().size.y;
+
+	funnel_buffer_get_size(buf, &width, &height);
+
+	if ((width != new_width || height != new_height) && (new_width > 0 && new_height > 0)) {
+		UtilityFunctions::print("[libfunnel] updating size (%d,%d)", new_width, new_height);
+		funnel_stream_set_size(stream, new_width, new_height);
+        funnel_stream_configure(stream);
+		return;
+	}
 
 	RenderingServer *rs = RenderingServer::get_singleton();
 	RenderingDevice *rd = rs->get_rendering_device();
-	RID rid = this->texture->get_rid();
+	RID rid = this->target_viewport->get_viewport_rid();
 	VkImage image = (VkImage) rd->get_driver_resource(RenderingDevice::DRIVER_RESOURCE_TEXTURE, rid, 0);
+	ERR_FAIL_COND_MSG(image == VK_NULL_HANDLE, "[libfunnel] vkimage not available");
 
-	funnel_buffer_get_vk_image(buf, &image);
+	ret = funnel_buffer_get_vk_image(buf, &image);
+	ERR_FAIL_COND_MSG(ret != 0, "[libfunnel] unable to bind image to buffer");
 
 	this->buf = buf;
 }
@@ -148,8 +164,8 @@ void FunnelSender::send_texture() {
 	this->buf == nullptr;
 }
 
-Ref<ViewportTexture> FunnelSender::get_viewport_texture() {
-	return this->texture;
+Viewport* FunnelSender::get_target_viewport() {
+	return this->target_viewport;
 }
 
 String FunnelSender::get_sender_name() {

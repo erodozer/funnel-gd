@@ -14,3 +14,6 @@ config/name="godot cpp template"
 run/main_scene="uid://dh0oj81pufivs"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
+
+[rendering]
+rendering_device/vulkan/additional_device_extensions=PackedStringArray("VK_EXT_external_memory_dma_buf","VK_KHR_external_semaphore_fd")

@@ -14,6 +14,15 @@ build the project with
 scons
 ```
 
+**Important:** Godot is currently missing support for certain required vulkan extensions for sharing Vulkan dma buf.  The example project depends on a build of Godot patched with [PR 114940](https://github.com/godotengine/godot/pull/114940) to be able to send textures.
+
+For your project to include the required extensions, within the `project.godot` file add
+
+```
+[rendering]
+rendering_device/vulkan/additional_device_extensions=PackedStringArray("VK_EXT_external_memory_dma_buf","VK_KHR_external_semaphore_fd")
+```
+
 ## Usage
 
 Only available for Godot projects using Forward+ Renderer, as the integration is currently restricted to Vulkan.
@@ -28,5 +37,5 @@ extends Node
 @onready var funnel_sender: FunnelSender = $FunnelSender
 
 func _ready():
-	funnel_sender.set_viewport_texture(get_viewport().get_texture())
+	funnel_sender.set_target_viewport(get_viewport())
 ```
