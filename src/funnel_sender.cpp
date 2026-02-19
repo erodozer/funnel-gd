@@ -87,7 +87,9 @@ void FunnelSender::start_stream() {
 	ERR_FAIL_COND_MSG(ret == -ENODEV, "[libfunnel] unable to init from vulkan (could not locate DRM render mode)");
 	
 	funnel_stream_set_mode(stream, FUNNEL_ASYNC);
-    
+	funnel_stream_set_rate(stream, FUNNEL_RATE_VARIABLE, FUNNEL_FRACTION(1, 1), FUNNEL_FRACTION(1000, 1));
+    funnel_stream_vk_set_usage(stream, VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+	
 	funnel_stream_vk_add_format(stream, VK_FORMAT_R8G8B8A8_SRGB, true, VK_FORMAT_FEATURE_BLIT_DST_BIT);
 	funnel_stream_vk_add_format(stream, VK_FORMAT_B8G8R8A8_SRGB, true, VK_FORMAT_FEATURE_BLIT_DST_BIT);
 	funnel_stream_vk_add_format(stream, VK_FORMAT_R8G8B8A8_SRGB, false, VK_FORMAT_FEATURE_BLIT_DST_BIT);
@@ -96,12 +98,13 @@ void FunnelSender::start_stream() {
 	Vector2i size = this->target_viewport->get_visible_rect().size;
 	ERR_FAIL_COND_MSG(size.x == 0 || size.y == 0, "[libfunnel] viewport dimensions must be larger than (0,0)");
     funnel_stream_set_size(stream, size.x, size.y);
+	funnel_stream_configure(stream);
 	
 	ret = funnel_stream_start(stream);
-	ERR_FAIL_COND_MSG(ret != 0, "[libfunnel] unable to start stream: " + this->sender_name);
+	ERR_FAIL_COND_MSG(ret != 0, "[libfunnel] unable to start stream, id:" + this->sender_name);
 
 	this->stream = stream;
-	UtilityFunctions::print("[libfunnel] stream started (id: ", this->sender_name, ")");
+	UtilityFunctions::print("[libfunnel] stream started, id: ", this->sender_name);
 }
 
 void FunnelSender::set_sender_name(String name) {
