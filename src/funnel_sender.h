@@ -7,6 +7,7 @@
 #include <godot_cpp/variant/variant.hpp>
 
 #include <funnel.h>
+#include <funnel-vk.h>
 
 using namespace godot;
 
@@ -16,6 +17,9 @@ class FunnelSender : public Node {
 private:
 	struct funnel_stream *stream;
 	struct funnel_buffer *buf;
+	
+	VkCommandPool command_pool;
+	VkCommandBuffer command_buffer;
 
 	String sender_name;
 	Viewport *target_viewport;
