@@ -52,7 +52,7 @@ void FunnelSender::stop_stream() {
 		return;
 	}
 
-	UtilityFunctions::print("[libfunnel] stream exists, stopping");
+	UtilityFunctions::print("[libfunnel] stopping stream");
 
 	funnel_stream_stop(this->stream);
 	funnel_stream_destroy(this->stream);
@@ -71,7 +71,6 @@ void FunnelSender::start_stream() {
 
 	ERR_FAIL_COND_MSG(ctx == nullptr, "[libfunnel] ctx is not properly initialized");
 
-	struct funnel_stream *stream;
 	RID placeholder;
 
 	RenderingServer *rs = RenderingServer::get_singleton();
@@ -99,13 +98,15 @@ void FunnelSender::start_stream() {
 	if (this->command_buffer == nullptr) {
 		VkCommandBufferAllocateInfo alloc_info;
 		alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		alloc_info.commandPool = command_pool;
+		alloc_info.commandPool = this->command_pool;
 		alloc_info.commandBufferCount = 1;
 		alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
 		VkResult result = vkAllocateCommandBuffers(device, &alloc_info, &this->command_buffer);
 		ERR_FAIL_COND_MSG(result != VK_SUCCESS, "[libfunnel/vulkan] unable to allocate command buffer");
 	}
+
+	struct funnel_stream *stream;
 
 	int ret;
 	ret = funnel_stream_create(ctx, (const char*)this->sender_name.ptrw(), &stream);
@@ -185,15 +186,15 @@ void FunnelSender::prepare_buffer() {
 }
 
 int copy_image(VkCommandBuffer command_buffer, VkImage source, VkImage image, int32_t width, int32_t height) {
+	ERR_FAIL_COND_V_MSG(command_buffer == nullptr, -EINVAL, "[libfunnel/vulkan] command buffer is not initialized");
+
 	VkResult ret;
 	VkCommandBufferBeginInfo begin_info;
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 	ret = vkBeginCommandBuffer(command_buffer, &begin_info);
-	if (ret != VK_SUCCESS) {
-		return -EINVAL;
-	}
+	ERR_FAIL_COND_V_MSG(ret != VK_SUCCESS, -EINVAL, "[libfunnel/vulkan] command buffer is not initialized");
 
 	// copy godot texture to pw buffer
 	VkImageBlit region = {
@@ -221,9 +222,7 @@ int copy_image(VkCommandBuffer command_buffer, VkImage source, VkImage image, in
 				VK_FILTER_NEAREST);
 
 	ret = vkEndCommandBuffer(command_buffer);
-	if (ret != VK_SUCCESS) {
-		return -EINVAL;
-	}
+	ERR_FAIL_COND_V_MSG(ret != VK_SUCCESS, -EINVAL, "[libfunnel/vulkan] command buffer could not close");
 
 	return 0;
 }
@@ -234,7 +233,7 @@ void FunnelSender::send_texture() {
 	}
 
 	uint32_t bwidth, bheight;
-	funnel_buffer_get_size(buf, &bwidth, &bheight);
+	funnel_buffer_get_size(this->buf, &bwidth, &bheight);
 
 	RenderingServer *rs = RenderingServer::get_singleton();
 	RenderingDevice *rd = rs->get_rendering_device();
@@ -272,4 +271,3 @@ Viewport* FunnelSender::get_target_viewport() {
 String FunnelSender::get_sender_name() {
 	return this->sender_name;
 }
-
